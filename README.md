@@ -35,6 +35,10 @@ Le **22 HIGH** residue, tutte con fix disponibile:
 | zod | 3.25.76 | 4.6.6 | **NO override**: triage VEX |
 | libcurl, brotli-libs (OS) | 8.22.0-r0 / 1.2.0-r1 | 8.23.0-r0 / 1.2.1-r0 | Dockerfile (Fase 1) |
 
+Wiz, sulla stessa immagine, aggiunge 3 HIGH che il DB Trivy non riporta:
+`tedious` 20.0.5, `samlify` 2.13.0 e l'`undici` 6.28.1 bundled in npm.
+Sono coperti in Fase 1/3 (per questo non compaiono nella tabella sopra).
+
 Due fatti strutturali che spiegano tutto:
 
 1. **La base non è stata aggiornata con la 2.45.4**: il Dockerfile di
@@ -86,7 +90,7 @@ scrittura da Actions.
 ### Fase 1 — Runtime base image (OS 0)
 
 Copia `docker/images/n8n/Dockerfile` nel checkout al posto di quello upstream.
-Contiene due modifiche marcate `# HARDENING`:
+Contiene tre modifiche marcate `# HARDENING`:
 - `RUNTIME_IMAGE` bumpata al digest del 23/10 (`sha256:4f98092c…`): la base
   rebuildata elimina `libde265` (misurato: 32 → 25 CVE OS). Il `BUILDER_IMAGE`
   è irrilevante per l'immagine finale (multi-stage: solo i `.node` vengono copiati).
@@ -98,6 +102,10 @@ Contiene due modifiche marcate `# HARDENING`:
   compatibili; vecchi file brotli rimossi e symlink aggiornati. Verifica con
   `n8n --version` e lo smoke test dell'immagine. Se in futuro `n8nio/base`
   pubblica un digest con i fix, preferiscilo e rimuovi lo stage.
+- `undici` di **npm**: la base include npm 11.21.1 con `undici 6.28.1`
+  (CVE-2026-109869) in `/usr/lib/node_modules/npm`; il Dockerfile crea
+  `undici@6.29.1` in uno stage e sostituisce solo la copia interna di npm.
+  Il copy di n8n era già a 6.29.1/7.30.1 via catalog.
 
 Rebuild e verifica con `./scripts/scan.sh <registry>/n8n:2.45.4-r1`. Atteso: livello OS a 0.
 Misurato sull'immagine locale: **OS 0 HIGH** (libcurl/brotli chiusi, base senza
@@ -115,7 +123,7 @@ CI passa `RUNTIME_IMAGE` come environment, aggiornalo lì.
 Esito misurato: 113 → 95 CVE, CRITICAL 4 → 0. Il contatore attivo è ora la minor:
 riguardo all'upgrade cadenziale (Fase 4), mantieniti entro 2 minor dalla corrente.
 
-### Fase 3 — Sollevare i pin (chiude 18 delle 20 HIGH node)
+### Fase 3 — Sollevare i pin (chiude 18 delle 20 HIGH node Trivy + 2 HIGH Wiz)
 
 Dal checkout `release/2.45.4` (o del tuo fork sopra di esso):
 
@@ -147,7 +155,7 @@ e `docker push`), oppure fai pushare bake direttamente settando
 caso lo script richiede anche `RUNNERS_IMAGE_BASE_NAME` sullo stesso registry,
 altrimenti si ferma con errore (evita push accidentale sul repo ufficiale).
 
-Le 9 modifiche del diff (i selettori non usati da upstream restano no-op quando
+Le 11 modifiche del diff (i selettori non usati da upstream restano no-op quando
 n8n bumpa da solo):
 
 | Sezione | Voce | Da | A |
@@ -161,6 +169,18 @@ n8n bumpa da solo):
 | overrides | `follow-redirects` | 1.16.0 (pin esatto) | 1.16.1 |
 | overrides | `toml` (selettore `toml@<5.0.1`) | 4.2.0 | 5.0.1 |
 | overrides | `@azure/msal-node` (aggiunto) | 5.1.5 / 5.6.0 | ^7.1.0 |
+| overrides | `'mssql@12.7.0>tedious'` | 20.0.5 | 20.3.7 |
+| overrides | `samlify` (aggiunto) | 2.13.0 | 2.15.0 |
+
+ℹ️ **Wiz aggiunge 3 HIGH che Trivy non vede**: `tedious` 20.0.5
+(GHSA-wj7m-ffj3-574h), `samlify` 2.13.0 (GHSA-wr2x-fh6q-q243) e l'`undici`
+6.28.1 **bundled in npm** (`/usr/lib/node_modules/npm`), non il copy di n8n.
+I primi due sono chiusi da questo diff; il terzo dal Dockerfile. `zod` resta
+l'unico HIGH residuo.
+
+⚠️ **Nota su `tedious`/`samlify`**: bump minor (20.0.5 → 20.3.7, 2.13.0 →
+2.15.0). Testare il nodo Microsoft SQL e il login SAML SSO dopo il rebuild;
+se qualcosa si rompe, spostare la voce in majors/VEX.
 
 ℹ️ **Nota su `toml`**: è un salto **major** (4 → 5), ma l'unico breaking change
 riguarda gli interi fuori dal range sicuro di JavaScript (`> 2^53-1`): 5.0.1 li
@@ -289,6 +309,10 @@ L'unico HIGH residuo è `zod` (candidato VEX); `markdown-it` è chiuso
 dall'upgrade. La copia 13.0.2 di `vue-markdown-render` resta nel bundle
 frontend ma non nella closure server e non è nel path delle CVE. Il livello
 OS è a **0 CVE** in tutte le severità; le 29 residue sono tutte nel bundle node.
+
+Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
+La r2 applica i fix dei primi tre; resta `zod`. La riga "misurato" sopra è la
+r1, la r2 viene verificata a parte dopo la pubblicazione.
 
 Il residuo MED/LOW (~43) non si chiude a uno a uno: si gestisce con fix
 opportunistici quando upstream bumpa, e VEX con scadenza per il resto.

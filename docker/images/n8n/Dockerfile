@@ -19,6 +19,14 @@ ARG RUNTIME_IMAGE=n8nio/base:26.12.1@sha256:4f98092ca321cc3395c056791013c2ad0469
 FROM alpine:3.24 AS libcurl-fix
 RUN apk add --no-cache 'libcurl>=8.23.0-r0' 'brotli-libs>=1.2.1-r0'
 
+# HARDENING: npm 11.21.1 in the base bundles undici 6.28.1 (CVE-2026-109869).
+# Build the fixed, dependency-free 6.29.1 once on the build platform and copy
+# it over npm's internal copy in the runtime image.
+FROM --platform=$BUILDPLATFORM node:26.12.1-alpine3.24 AS undici-fix
+RUN npm pack undici@6.29.1 --pack-destination /tmp \
+ && mkdir -p /tmp/undici \
+ && tar xzf /tmp/undici-6.29.1.tgz -C /tmp/undici --strip-components=1
+
 # The runtime base has no compiler, so this stage supplies one.
 FROM ${BUILDER_IMAGE} AS toolchain
 RUN apk add --no-cache python3 make g++
@@ -116,6 +124,10 @@ RUN set -e; \
     rm -f /usr/lib/libbrotlicommon.so.1.2.0 /usr/lib/libbrotlidec.so.1.2.0 /usr/lib/libbrotlienc.so.1.2.0; \
     sed -i 's/^V:8.22.0-r0$/V:8.23.0-r0/' /lib/apk/db/installed; \
     sed -i 's/^V:1.2.0-r1$/V:1.2.1-r0/; s/libbrotlicommon\.so\.1\.2\.0/libbrotlicommon.so.1.2.1/g; s/libbrotlidec\.so\.1\.2\.0/libbrotlidec.so.1.2.1/g; s/libbrotlienc\.so\.1\.2\.0/libbrotlienc.so.1.2.1/g; s/=1\.2\.0/=1.2.1/g' /lib/apk/db/installed
+
+# HARDENING: replace npm's bundled undici 6.28.1 with 6.29.1.
+RUN rm -rf /usr/lib/node_modules/npm/node_modules/undici
+COPY --from=undici-fix /tmp/undici /usr/lib/node_modules/npm/node_modules/undici
 
 EXPOSE 5678/tcp
 USER node
