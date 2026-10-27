@@ -1,0 +1,29 @@
+{
+	"_comment": [
+		"VEX - triage delle CVE accettate / false positive. Formato OpenVEX v0.2.0,",
+		"lo stesso usato da n8n upstream (security/vex.openvex.json nel repo che buildi).",
+		"",
+		"REGOLE:",
+		"1) Un VEX con statement non verificati è PIÙ dannoso di nessun VEX: ogni",
+		"   'not_affected' va motivato con un'analisi di reachability reale (dove è",
+		"   importato il pacchetto, quale code path lo tocca, è esposto via HTTP/UI?),",
+		"2) usa i selettori con range nel package.json degli override quando puoi fixare;",
+		"   VEX solo per ciò che NON puoi o non devi fixare (es. zod 3.x)",
+		"3) imposta sempre 'last_updated'/'expiration' così gli accettati decadono e",
+		"   riesplodono alla prossima scan se non rivalutati (vedi README §Fase 4).",
+		"",
+		"Nota: markdown-it 13.x NON è in questo file. L'upgrade a 14.3.3 è stato",
+		"validato (suite markdown/typecheck verdi, immagine senza finding markdown-it):",
+		"resta in Fase 3b, non serve un'eccezione VEX.",
+		"",
+		"Un template pronto da compilare è in security/vex-statement-template.json.",
+		"Trivy lo carica con: trivy image --vex security/vex.openvex.json ..."
+	],
+	"@context": "https://openvex.dev/ns/v0.2.0",
+	"@id": "https://github.com/CHANGE-ME/n8n-container/vex",
+	"author": "Security Team <security@CHANGE-ME.example>",
+	"timestamp": "2026-10-27T00:00:00Z",
+	"last_updated": "2026-10-27T00:00:00Z",
+	"version": 3,
+	"statements": []
+}

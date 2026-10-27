@@ -1,0 +1,11 @@
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -232,7 +232,7 @@
+   lodash-es: 4.18.1
+   lru-cache: 11.5.1
+   luxon: 3.7.2
+-  markdown-it: ^13.0.2
++  markdown-it: ^14.3.3
+   markdown-it-link-attributes: ^4.0.1
+   mime-types: 3.0.2
+   moment-timezone: 0.5.48

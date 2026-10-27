@@ -1,0 +1,25 @@
+{
+	"_comment": [
+		"TEMPLATE di statement VEX - non usare direttamente.",
+		"Copia l'oggetto in 'statements' di vex.openvex.json e compila i placeholder.",
+		"",
+		"status ammessi: not_affected (con justification E impact_statement), affected (con",
+		"action_statement che dice CHI deve fixare cosa entro quando), fixed (dopo il fix).",
+		"",
+		"justification validi per not_affected: vulnerable_code_not_present,",
+		"vulnerable_code_not_in_execute_path, vulnerable_code_cannot_be_controlled_by_adversary,",
+		"inline_mitigations_already_exist.",
+		"",
+		"ESEMPIO VERIFICATO prima di usare: capire se il pacchetto raggiunge un path",
+		"eseguibile. Caso tipico n8n: pacchetti importati solo dal processo di build,",
+		"oppure usati solo da nodi che richiedono credenziali che non hai configurato."
+	],
+	"vulnerability": { "@id": "CVE-XXXX-YYYYY", "name": "CVE-XXXX-YYYYY" },
+	"timestamp": "2026-10-27T00:00:00Z",
+	"last_updated": "2026-10-27T00:00:00Z",
+	"expiration": "2027-01-31T00:00:00Z",
+	"products": [ { "@id": "pkg:npm/NOME-PACCHETTO@VERSIONE-INSTALLATA" } ],
+	"status": "not_affected",
+	"justification": "vulnerable_code_not_in_execute_path",
+	"impact_statement": "SOSTITUISCI: perché questo pacchetto/cVE non è raggiungibile in n8n: dove è importato, quale path lo tocca, perché non è esposto."
+}

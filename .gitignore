@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+
+# Generated scans and SBOMs; baselines stay versioned.
+reports/scan-*.json
+reports/sbom-*.cdx.json

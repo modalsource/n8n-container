@@ -1,0 +1,110 @@
+# Build the hardened n8n image for amd64 + arm64 and publish it to GHCR.
+#
+# Manual run:
+#   image_tag = 2.45.4-r1, n8n_version = 2.45.4
+# Tag run:
+#   git tag v2.45.4-r1 && git push origin v2.45.4-r1
+#
+# The workflow clones n8n at the requested release tag, applies the hardening
+# diffs from this repository, replaces the Dockerfile, builds the app once and
+# then uses buildx (QEMU) to produce a multi-arch manifest.
+name: build-and-push
+
+on:
+  workflow_dispatch:
+    inputs:
+      n8n_version:
+        description: 'n8n release to harden (tag n8n@<version>)'
+        required: true
+        default: '2.45.4'
+      image_tag:
+        description: 'Image tag to publish (e.g. 2.45.4-r1)'
+        required: true
+        default: '2.45.4-r1'
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  NODE_OPTIONS: '--max-old-space-size=8192'
+
+jobs:
+  build-and-push:
+    name: Build and push (amd64 + arm64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout toolkit
+        uses: actions/checkout@v4
+
+      - name: Resolve n8n version and image tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "n8n_version=${{ inputs.n8n_version }}" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            tag="${GITHUB_REF_NAME#v}"
+            echo "image_tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "n8n_version=${tag%%-*}" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
+      - name: Checkout n8n release
+        uses: actions/checkout@v4
+        with:
+          repository: n8n-io/n8n
+          ref: n8n@${{ steps.meta.outputs.n8n_version }}
+          path: n8n-src
+          fetch-depth: 1
+
+      - name: Apply hardening diffs and Dockerfile
+        working-directory: n8n-src
+        run: |
+          git apply ../pnpm/safe-overrides.diff
+          git apply ../pnpm/majors-test-first.diff
+          cp ../docker/images/n8n/Dockerfile docker/images/n8n/Dockerfile
+          git diff --stat
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+          run_install: false
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        working-directory: n8n-src
+        run: pnpm install
+
+      - name: Build and push multi-arch images
+        working-directory: n8n-src
+        env:
+          N8N_VERSION: ${{ steps.meta.outputs.n8n_version }}
+          N8N_RELEASE_TYPE: stable
+          IMAGE_BASE_NAME: ghcr.io/${{ github.repository_owner }}/n8n-container
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          RUNNERS_IMAGE_BASE_NAME: ghcr.io/${{ github.repository_owner }}/n8n-container-runners
+          PLATFORMS: linux/amd64,linux/arm64
+        run: pnpm build:docker

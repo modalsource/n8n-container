@@ -1,0 +1,45 @@
+# Gate di sicurezza immagine: build -> scan -> (push solo se gate verde).
+# Adattare il job di build al pipeline reale; questo file mostra il trivy gate.
+name: image-security-gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Immagine da scansionare (es. registry/n8n:2.45.4-r1)'
+        required: true
+        default: 'n8nio/n8n:2.45.4'
+  push:
+    tags: ['n8n-v*'] # es. il tag con cui publicate la vostra immagine
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Trivy
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Aggiorna DB vulnerabilità
+        run: trivy image --download-db-only
+
+      - name: Scan + gate (CRITICAL/HIGH con fix, VEX, policy)
+        env:
+          IMAGE: ${{ github.event.inputs.image || format('n8nio/n8n:{0}', github.ref_name) }}
+        run: ./scripts/scan.sh "$IMAGE"
+
+      - name: Carica report JSON (sempre, anche se il gate fallisce)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: |
+            reports/scan-*.json
+            reports/sbom-*.cdx.json
+          if-no-files-found: ignore
