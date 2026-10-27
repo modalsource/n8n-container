@@ -96,7 +96,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: n8n-src
-        run: pnpm install
+        # The catalog/overrides changed, so the lockfile must be regenerated
+        # (CI=true makes pnpm default to --frozen-lockfile).
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build and push multi-arch images
         working-directory: n8n-src
