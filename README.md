@@ -307,16 +307,18 @@ immagine siano stati rigenerati con `pnpm install && pnpm build:docker`.
 | 2.45.4 (oggi) | 95 | 0 | 22 | 46 | 27 |
 | dopo Fase 1 + 3 | ~45 | 0 | 2 | 38 | 5 |
 | dopo Fase 3b (markdown-it 14.3.3) | ~44 | 0 | 1 | 38 | 5 |
-| **misurato su ghcr.io/modalsource/n8n-container:2.45.4-r2** | **29** | **0** | **1** | **24** | **4** |
+| **misurato su ghcr.io/modalsource/n8n-container:2.45.4-r3** | **30** | **0** | **1** | **25** | **4** |
 
 L'unico HIGH residuo è `zod` (candidato VEX); `markdown-it` è chiuso
 dall'upgrade. La copia 13.0.2 di `vue-markdown-render` resta nel bundle
 frontend ma non nella closure server e non è nel path delle CVE. Il livello
-OS è a **0 CVE** in tutte le severità; le 29 residue sono tutte nel bundle node.
+OS è a **0 CVE** in tutte le severità; le 30 residue sono tutte nel bundle node.
+Il MED in più rispetto alla r2 è `qs` CVE-2026-110816, emerso con il DB del
+28/10 sullo stesso `qs 6.15.2` (non è una regressione dell'immagine).
 
 Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
-La r2 chiude i primi tre (verificati nell'immagine: `tedious 20.3.7`,
-`samlify 2.15.0`, `undici` di npm `6.29.1`); resta `zod`.
+La r2 ha chiuso i primi tre; la r3 chiude anche `@modelcontextprotocol/node`
+2.0.0 → 2.1.0. Resta `zod`.
 
 Il residuo MED/LOW (~43) non si chiude a uno a uno: si gestisce con fix
 opportunistici quando upstream bumpa, e VEX con scadenza per il resto.
