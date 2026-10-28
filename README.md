@@ -26,6 +26,7 @@ Le **22 HIGH** residue, tutte con fix disponibile:
 | follow-redirects | 1.16.0 | 1.16.1 | override `pnpm-workspace.yaml` (Fase 3) |
 | @modelcontextprotocol/sdk | 1.31.0 | 1.32.0 | catalog `pnpm-workspace.yaml` (Fase 3) |
 | @modelcontextprotocol/server | 2.0.0 | 2.3.0 | catalog `pnpm-workspace.yaml` (Fase 3) |
+| @modelcontextprotocol/node | 2.0.0 | 2.1.0 | catalog `pnpm-workspace.yaml` (Fase 3; finding DB 28/10) |
 | undici | 6.29.0 / 7.29.1 | 6.29.1 / 7.30.1 | catalog `pnpm-workspace.yaml` (Fase 3) |
 | multer | 2.3.0 | 2.5.0 | override (Fase 3) |
 | body-parser | 2.3.0 | 2.4.0 | override (Fase 3) |
@@ -38,6 +39,8 @@ Le **22 HIGH** residue, tutte con fix disponibile:
 Wiz, sulla stessa immagine, aggiunge 3 HIGH che il DB Trivy non riporta:
 `tedious` 20.0.5, `samlify` 2.13.0 e l'`undici` 6.28.1 bundled in npm.
 Sono coperti in Fase 1/3 (per questo non compaiono nella tabella sopra).
+Il DB aggiornato del 28/10 aggiunge anche `@modelcontextprotocol/node` 2.0.0
+(GHSA-f897-62hf-6gxq → 2.1.0), chiuso in Fase 3.
 
 Due fatti strutturali che spiegano tutto:
 
@@ -155,11 +158,12 @@ e `docker push`), oppure fai pushare bake direttamente settando
 caso lo script richiede anche `RUNNERS_IMAGE_BASE_NAME` sullo stesso registry,
 altrimenti si ferma con errore (evita push accidentale sul repo ufficiale).
 
-Le 11 modifiche del diff (i selettori non usati da upstream restano no-op quando
+Le 12 modifiche del diff (i selettori non usati da upstream restano no-op quando
 n8n bumpa da solo):
 
 | Sezione | Voce | Da | A |
 |---|---|---|---|
+| catalog | `@modelcontextprotocol/node` | 2.0.0 | 2.1.0 |
 | catalog | `@modelcontextprotocol/sdk` | 1.31.0 | 1.32.0 |
 | catalog | `@modelcontextprotocol/server` | 2.0.0 | 2.3.0 |
 | catalog | `undici-v6` | ^6.28.1 | ^6.29.1 |
