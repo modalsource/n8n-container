@@ -164,6 +164,45 @@ rebuild dell'immagine. `N8N_COMMUNITY_PACKAGES_ENABLED` non li riguarda.
 Se il deployment imposta `N8N_CUSTOM_EXTENSIONS`, deve includere anche
 `/opt/n8n-custom-nodes` (in questa release di n8n il separatore è `;`).
 
+### Gestione di `N8N_CUSTOM_EXTENSIONS`
+
+Il Dockerfile la imposta a `/opt/n8n-custom-nodes`; essendo un `ENV`
+dell'immagine vale per tutti i processi che partono dal container (server,
+worker in queue mode, CLI), senza aggiungere nulla al deployment.
+
+- **Formato**: lista di directory separate da `;` (in n8n 2.x; le guide
+  vecchie indicano `:`, che qui non funziona). Niente spazi tra le voci.
+- **Cosa carica**: per ogni directory n8n legge
+  `<dir>/node_modules/<pkg>/package.json`, richiede il campo `n8n` e carica i
+  file elencati in `n8n.nodes`/`n8n.credentials`. Una directory vuota o un
+  manifest incompleto viene ignorata (visibile solo con log level `debug`).
+- **Aggiungere una directory** (es. nodi montati da ConfigMap/volume): va
+  elencata insieme a quella dell'immagine, altrimenti i nodi baked spariscono:
+
+  ```yaml
+  env:
+    - name: N8N_CUSTOM_EXTENSIONS
+      value: "/opt/n8n-custom-nodes;/home/node/.n8n/custom"
+  ```
+
+  Lo stesso valore va impostato su **tutti** i pod che caricano nodi (main e
+  worker); i task runner esterni non eseguono i nodi custom, quindi non serve.
+- **Disattivare i nodi baked** senza rifare l'immagine: punta la variabile a
+  una directory vuota (es. `/home/node/.n8n/custom`). Con la variabile non
+  impostata n8n userebbe solo `~/.n8n/custom`: non è il caso di questa
+  immagine, che la definisce sempre.
+- **Non confonderla con le community packages** installate dalla UI: quelle
+  stanno in `~/.n8n/nodes`, sono registrate nel DB e si gestiscono da
+  *Community nodes*. `N8N_CUSTOM_EXTENSIONS` è il meccanismo separato per
+  directory arbitrarie (ed è quello usato qui).
+
+Verifica rapida dentro il container:
+
+```bash
+printenv N8N_CUSTOM_EXTENSIONS          # /opt/n8n-custom-nodes
+n8n export:nodes --output=/tmp/n.json   # cerca i nodi con prefisso CUSTOM.
+```
+
 Verificato su `n8nio/n8n:2.45.4` con la directory montata: `n8n export:nodes`
 elenca `CUSTOM.imageFormatConverter`, `CUSTOM.pdfKit`, `CUSTOM.suiteCRM` e
 `CUSTOM.suitecrmTrigger`. Il caricamento dipende dal loader interno di n8n:
