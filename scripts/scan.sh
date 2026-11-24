@@ -3,6 +3,8 @@
 #   ./scripts/scan.sh <immagine[:tag]>            # gate su CRIT/HIGH con fix disponibile
 #   IGNORE_UNFIXED=0 ./scripts/scan.sh <img>     # baseline completa (anche senza fix)
 #   SBOM=1 ./scripts/scan.sh <img>               # produce anche SBOM CycloneDX
+#   IMAGE_SRC=docker ./scripts/scan.sh <img>     # scansiona l'immagine nel daemon locale
+#   PLATFORM=linux/arm64 ./scripts/scan.sh <img> # forza la piattaforma (default: host)
 # Exit code: 0 = gate superato, 1 = vulnerabilità sopra soglia, 2 = errore.
 set -u
 
@@ -10,6 +12,8 @@ IMAGE=${1:?Uso: scan.sh <immagine[:tag]>}
 SEV_GATE=${SEV_GATE:-CRITICAL,HIGH}
 IGNORE_UNFIXED=${IGNORE_UNFIXED:-1}
 SBOM=${SBOM:-0}
+IMAGE_SRC=${IMAGE_SRC:-remote}
+PLATFORM=${PLATFORM:-}
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/reports"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -22,12 +26,13 @@ mkdir -p "$OUT"
 # prima non è confrontabile.
 trivy image --download-db-only >/dev/null 2>&1 || true
 
-ARGS=(image --scanners vuln --severity "$SEV_GATE" --format json --output "$SCAN_FILE")
+ARGS=(image --scanners vuln --severity "$SEV_GATE" --format json --output "$SCAN_FILE" --image-src "$IMAGE_SRC")
+[ -n "$PLATFORM" ] && ARGS+=(--platform "$PLATFORM")
 [ "$IGNORE_UNFIXED" = "1" ] && ARGS+=(--ignore-unfixed)
 [ -f "$ROOT/security/vex.openvex.json" ] && ARGS+=(--vex "$ROOT/security/vex.openvex.json")
 [ -f "$ROOT/security/trivy-ignore-policy.rego" ] && ARGS+=(--ignore-policy "$ROOT/security/trivy-ignore-policy.rego")
 
-echo ">> Scan $IMAGE (gate: $SEV_GATE, ignore-unfixed: $IGNORE_UNFIXED)"
+echo ">> Scan $IMAGE (gate: $SEV_GATE, ignore-unfixed: $IGNORE_UNFIXED, image-src: $IMAGE_SRC${PLATFORM:+, platform: $PLATFORM})"
 set +e
 trivy "${ARGS[@]}" --exit-code 1 "$IMAGE"
 TRIVY_RC=$?

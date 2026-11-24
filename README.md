@@ -67,6 +67,7 @@ security/trivy-ignore-policy.rego     # policy di ignore (copia upstream)
 scripts/scan.sh                       # gate: DB fresco, VEX+policy, exit code su CRIT/HIGH, SBOM opzionale
 scripts/summarize.mjs                 # riepilogo leggibile di un report Trivy JSON
 ci/trivy-gate.yml                     # GitHub Actions: scan + gate + artifact
+.github/workflows/scan-image.yml      # gate pre-push: build amd64 locale + Trivy (manuale o chiamato da publish)
 .github/workflows/publish.yml         # build multi-arch (amd64+arm64) + push GHCR
 reports/                              # baseline 2.44.7 (113), baseline 2.45.4 (95), base image (25)
 ```
@@ -84,6 +85,12 @@ ghcr.io/<owner>/n8n-container-runners:<tag>
 
 Esempio: `n8n_version=2.45.4`, `image_tag=2.45.4-r1` → tag `2.45.4-r1`.
 Per un tag git: `git tag v2.45.4-r1 && git push origin v2.45.4-r1`.
+
+Prima del push, il job `scan` chiama `.github/workflows/scan-image.yml`: build
+amd64 **locale** (niente registry) + Trivy. Se il gate fallisce, `build-and-push`
+non parte e nulla viene pubblicato. Lo stesso workflow è lanciabile a mano da
+Actions → *scan-image* → *Run workflow* per ri-scansionare senza pubblicare.
+
 Il workflow usa `GITHUB_TOKEN` con `packages: write`; non servono altri secret.
 Per un'organizzazione, verifica che i package GHCR siano abilitati alla
 scrittura da Actions.
@@ -158,7 +165,7 @@ e `docker push`), oppure fai pushare bake direttamente settando
 caso lo script richiede anche `RUNNERS_IMAGE_BASE_NAME` sullo stesso registry,
 altrimenti si ferma con errore (evita push accidentale sul repo ufficiale).
 
-Le 12 modifiche del diff (i selettori non usati da upstream restano no-op quando
+Le 13 modifiche del diff (i selettori non usati da upstream restano no-op quando
 n8n bumpa da solo):
 
 | Sezione | Voce | Da | A |
@@ -168,6 +175,7 @@ n8n bumpa da solo):
 | catalog | `@modelcontextprotocol/server` | 2.0.0 | 2.3.0 |
 | catalog | `undici-v6` | ^6.28.1 | ^6.29.1 |
 | catalog | `undici-v7` | ^7.29.1 | ^7.30.1 |
+| catalog | `vue-i18n` (catalog frontend) | ^11.4.4 | ^11.4.14 |
 | overrides | `multer` | ^2.3.0 | ^2.5.0 |
 | overrides | `body-parser` | 2.3.0 | 2.4.0 |
 | overrides | `follow-redirects` | 1.16.0 (pin esatto) | 1.16.1 |
@@ -180,7 +188,7 @@ n8n bumpa da solo):
 (GHSA-wj7m-ffj3-574h), `samlify` 2.13.0 (GHSA-wr2x-fh6q-q243) e l'`undici`
 6.28.1 **bundled in npm** (`/usr/lib/node_modules/npm`), non il copy di n8n.
 I primi due sono chiusi da questo diff; il terzo dal Dockerfile. `zod` resta
-l'unico HIGH residuo.
+l'unico HIGH residuo (coperto da VEX con scadenza 2027-01-28).
 
 ⚠️ **Nota su `tedious`/`samlify`**: bump minor (20.0.5 → 20.3.7, 2.13.0 →
 2.15.0). Testare il nodo Microsoft SQL e il login SAML SSO dopo il rebuild;
@@ -274,23 +282,27 @@ immagine siano stati rigenerati con `pnpm install && pnpm build:docker`.
   change sugli interi non tocca il path usato da n8n. Vedi la nota in Fase 3.
 - **`zod`: NON toccare.** Upstream pinna 3.25.76 repo-wide apposta (solo `knip`
   riceve zod 4 via scoped override). Forzarlo a 4 romperebbe la validazione di
-  tutta la codebase dei nodi → candidato VEX, da dichiarare con la procedura
-  descritta in Fase 4.
+  tutta la codebase dei nodi → coperto da VEX con scadenza 2027-01-28
+  (CVE-2023-54404), vedi Fase 4.
 - (`@azure/msal-node` è stato spostato in safe-overrides su richiesta: resta
   comunque un major, vedi la nota in Fase 3.)
 
 ### Fase 4 — Governance (il pezzo che rende sostenibile il processo)
 
-1. **Gate CI** (`ci/trivy-gate.yml` o nel tuo pipeline): `scan.sh` esce 1 se
-   restano CRITICAL/HIGH con fix disponibile dopo VEX e policy. Push solo a gate verde.
+1. **Gate CI** (`.github/workflows/scan-image.yml`, chiamato da `publish.yml`
+   prima del push): build amd64 locale → `scan.sh` → solo a gate verde parte il
+   build multi-arch con push. `scan.sh` esce 1 se restano CRITICAL/HIGH con fix
+   disponibile dopo VEX e policy.
 2. **VEX con scadenza**: ogni CVE accettata entra in `security/vex.openvex.json`
    con `expiration` (es. +90 giorni): gli accettati decadono da soli e riesplodono
    alla scan successiva se non rivalutati. Template pronto:
    `security/vex-statement-template.json`. Regola ferrea: `not_affected` solo
    dopo verifica di reachability reale (import chain, path eseguito, esposto via HTTP/UI).
+   L'eccezione zod è dichiarata esplicitamente come rischio accettato a scadenza
+   (mitigazione: limiti sui body delle richieste), non come falso positivo.
    Stato attuale: nessuno statement markdown-it (upgrade 14.3.3 adottato in
-   Fase 3b); `zod@3.25.76` resta il candidato VEX, da aggiungere quando si
-   farà il triage.
+   Fase 3b); `zod@3.25.76` (CVE-2023-54404) è coperto da uno statement VEX con
+   scadenza **2027-01-28**: upstream lo pinna repo-wide e il major 4 è breaking.
 3. **Cadenza**: ri-scan a ogni rebuild (il DB si aggiorna in `scan.sh`) + scan
    mensile della flotta + upgrade entro 2 minor dalla release corrente.
 4. **Tracciabilità**: SBOM CycloneDX insieme all'immagine (`SBOM=1 ./scripts/scan.sh …`)
@@ -309,12 +321,18 @@ immagine siano stati rigenerati con `pnpm install && pnpm build:docker`.
 | dopo Fase 3b (markdown-it 14.3.3) | ~44 | 0 | 1 | 38 | 5 |
 | **misurato su ghcr.io/modalsource/n8n-container:2.45.4-r3** | **30** | **0** | **1** | **25** | **4** |
 
-L'unico HIGH residuo è `zod` (candidato VEX); `markdown-it` è chiuso
-dall'upgrade. La copia 13.0.2 di `vue-markdown-render` resta nel bundle
-frontend ma non nella closure server e non è nel path delle CVE. Il livello
-OS è a **0 CVE** in tutte le severità; le 30 residue sono tutte nel bundle node.
-Il MED in più rispetto alla r2 è `qs` CVE-2026-110816, emerso con il DB del
-28/10 sullo stesso `qs 6.15.2` (non è una regressione dell'immagine).
+L'unico HIGH residuo è `zod` (coperto da VEX con scadenza 2027-01-28);
+`markdown-it` è chiuso dall'upgrade. La copia 13.0.2 di `vue-markdown-render`
+resta nel bundle frontend ma non nella closure server e non è nel path delle
+CVE. Il livello OS è a **0 CVE** in tutte le severità; le 30 residue sono tutte
+nel bundle node. Il MED in più rispetto alla r2 è `qs` CVE-2026-110816, emerso
+con il DB del 28/10 sullo stesso `qs 6.15.2` (non è una regressione
+dell'immagine).
+
+Con il DB del 30/10 la scan della r3 mostra anche CVE-2026-118257 (`vue-i18n`
+11.4.5 → 11.4.14): finding nuovo del DB, non una regressione. Il diff Fase 3
+ora porta il catalog frontend a `^11.4.14`, quindi il rebuild risolve il
+finding; il gate pre-push lo verifica.
 
 Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
 La r2 ha chiuso i primi tre; la r3 chiude anche `@modelcontextprotocol/node`

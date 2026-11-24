@@ -8,6 +8,10 @@
 # The workflow clones n8n at the requested release tag, applies the hardening
 # diffs from this repository, replaces the Dockerfile, builds the app once and
 # then uses buildx (QEMU) to produce a multi-arch manifest.
+#
+# Before the multi-arch push, the `scan` job calls scan-image.yml: it builds the
+# same image for linux/amd64 locally and runs the Trivy gate. If the gate fails,
+# build-and-push does not run and nothing is published.
 name: build-and-push
 
 on:
@@ -33,14 +37,13 @@ env:
   NODE_OPTIONS: '--max-old-space-size=8192'
 
 jobs:
-  build-and-push:
-    name: Build and push (amd64 + arm64)
+  meta:
+    name: Resolve n8n version and image tag
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    outputs:
+      n8n_version: ${{ steps.meta.outputs.n8n_version }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
     steps:
-      - name: Checkout toolkit
-        uses: actions/checkout@v4
-
       - name: Resolve n8n version and image tag
         id: meta
         run: |
@@ -54,11 +57,32 @@ jobs:
           fi
           cat "$GITHUB_OUTPUT"
 
+  # Blocking gate: build amd64 locally and scan it with Trivy. This job must
+  # pass before the multi-arch build can push anything to GHCR.
+  scan:
+    name: Build amd64 + Trivy gate
+    needs: meta
+    permissions:
+      contents: read
+    uses: ./.github/workflows/scan-image.yml
+    with:
+      n8n_version: ${{ needs.meta.outputs.n8n_version }}
+      image_tag: scan-${{ needs.meta.outputs.image_tag }}
+
+  build-and-push:
+    name: Build and push (amd64 + arm64)
+    needs: [meta, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout toolkit
+        uses: actions/checkout@v4
+
       - name: Checkout n8n release
         uses: actions/checkout@v4
         with:
           repository: n8n-io/n8n
-          ref: n8n@${{ steps.meta.outputs.n8n_version }}
+          ref: n8n@${{ needs.meta.outputs.n8n_version }}
           path: n8n-src
           fetch-depth: 1
 
@@ -103,10 +127,10 @@ jobs:
       - name: Build and push multi-arch images
         working-directory: n8n-src
         env:
-          N8N_VERSION: ${{ steps.meta.outputs.n8n_version }}
+          N8N_VERSION: ${{ needs.meta.outputs.n8n_version }}
           N8N_RELEASE_TYPE: stable
           IMAGE_BASE_NAME: ghcr.io/${{ github.repository_owner }}/n8n-container
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          IMAGE_TAG: ${{ needs.meta.outputs.image_tag }}
           RUNNERS_IMAGE_BASE_NAME: ghcr.io/${{ github.repository_owner }}/n8n-container-runners
           PLATFORMS: linux/amd64,linux/arm64
         run: pnpm build:docker

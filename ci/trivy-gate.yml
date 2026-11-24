@@ -1,5 +1,7 @@
 # Gate di sicurezza immagine: build -> scan -> (push solo se gate verde).
-# Adattare il job di build al pipeline reale; questo file mostra il trivy gate.
+# Template generico per altri repo. Il gate attivo di questo repository è
+# .github/workflows/scan-image.yml (build amd64 locale + Trivy, chiamato da
+# publish.yml prima del push multi-arch).
 name: image-security-gate
 
 on:
