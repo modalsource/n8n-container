@@ -455,6 +455,14 @@ Con il DB del 30/10 la scan della r3 mostra anche CVE-2026-118257 (`vue-i18n`
 ora porta il catalog frontend a `^11.4.14`, quindi il rebuild risolve il
 finding; il gate pre-push lo verifica.
 
+La **r4** (24/11, stesso n8n 2.45.4) chiude anche questo finding, i nodi custom
+sono preinstallati nell'immagine (0 finding aggiunti al gate) e il DB del 24/11
+ha fatto emergere altri quattro gruppi, tutti risolti con fix patch-level:
+`follow-redirects` CVE-2026-116689 (override 1.16.2), `openssh`
+CVE-2026-123158 CRITICAL (10.3_p1-r2) e le 4 HIGH di `libexpat` (2.10.0-r0).
+Gate con DB 24/11 sulla r4: **0 CRIT/HIGH**. Resta solo `zod`, coperto da VEX.
+Il full scan MED/LOW della r4 non è stato rilanciato.
+
 Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
 La r2 ha chiuso i primi tre; la r3 chiude anche `@modelcontextprotocol/node`
 2.0.0 → 2.1.0. Resta `zod`.
