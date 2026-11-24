@@ -15,9 +15,24 @@ ARG BUILDER_IMAGE=node:26.12.1-alpine3.24@sha256:40cd011b55415bc894e45b02fdd5a5d
 ARG RUNTIME_IMAGE=n8nio/base:26.12.1@sha256:4f98092ca321cc3395c056791013c2ad0469305d1734c031fc5bcb50afe5513a
 
 # HARDENING (Fase 1): the runtime base is a Docker Hardened Image with no apk
-# binary (apk add exits 127). Take the fixed libs from Alpine 3.24 instead.
-FROM alpine:3.24 AS libcurl-fix
-RUN apk add --no-cache 'libcurl>=8.23.0-r0' 'brotli-libs>=1.2.1-r0'
+# binary (apk add exits 127). Take the fixed packages from Alpine 3.24 instead.
+# Besides libcurl/brotli, the pinned base ships openssh 10.3_p1-r1
+# (CVE-2026-123158 CRITICAL, all openssh-* packages) and libexpat 2.9.0-r1
+# (4 HIGH); both have patch-level fixes upstream (10.3_p1-r2 / 2.10.0-r0).
+# The openssh binaries are built against the same OpenSSL 3.5.9 as the base,
+# so the tar is extracted over the runtime root.
+FROM alpine:3.24 AS os-fixes
+RUN apk add --no-cache \
+      'libcurl>=8.23.0-r0' \
+      'brotli-libs>=1.2.1-r0' \
+      'expat>=2.10.0-r0' \
+      'openssh>=10.3_p1-r2' \
+ && tar -cf /os-fixes.tar -C / \
+      usr/lib/libexpat.so.1.13.1 usr/lib/libexpat.so.1 \
+      usr/bin/ssh usr/bin/scp usr/bin/sftp usr/bin/ssh-add usr/bin/ssh-agent \
+      usr/bin/ssh-copy-id usr/bin/ssh-keyscan usr/bin/ssh-keygen \
+      usr/bin/ssh-pkcs11-helper usr/bin/findssl.sh \
+      usr/lib/ssh usr/sbin/sshd
 
 # HARDENING: npm 11.21.1 in the base bundles undici 6.28.1 (CVE-2026-109869).
 # Build the fixed, dependency-free 6.29.1 once on the build platform and copy
@@ -136,24 +151,29 @@ RUN set -e; \
     rm -rf /root/.npm /tmp/*
 
 # HARDENING (Fase 1): the pinned base ships libcurl 8.22.0-r0 and brotli-libs
-# 1.2.0-r1 (CVE-2026-92392 HIGH + ~22 LOW, CVE-2026-111497 HIGH). Fixes are
-# already published in the alpine 3.24 repositories (8.23.0-r0 / 1.2.1-r0).
-# The runtime base is a Docker Hardened Image with no apk binary, so we copy
-# the fixed libraries from the libcurl-fix stage and update the APK DB entries
-# (Trivy reads P/V from /lib/apk/db/installed). These are patch-level,
-# ABI-compatible replacements; the old brotli files are removed.
-COPY --from=libcurl-fix /usr/lib/libcurl.so.4.8.0 /usr/lib/
-COPY --from=libcurl-fix /usr/lib/libbrotlicommon.so.1.2.1 /usr/lib/
-COPY --from=libcurl-fix /usr/lib/libbrotlidec.so.1.2.1 /usr/lib/
-COPY --from=libcurl-fix /usr/lib/libbrotlienc.so.1.2.1 /usr/lib/
+# 1.2.0-r1 (CVE-2026-92392 HIGH + ~22 LOW, CVE-2026-111497 HIGH), plus the
+# openssh/libexpat versions from the os-fixes stage. Fixes are already published
+# in the alpine 3.24 repositories. The runtime base is a Docker Hardened Image
+# with no apk binary, so we copy the fixed files from os-fixes and update the
+# APK DB entries (Trivy reads P/V from /lib/apk/db/installed). These are
+# patch-level, ABI-compatible replacements; the old files are removed.
+COPY --from=os-fixes /os-fixes.tar /tmp/os-fixes.tar
+COPY --from=os-fixes /usr/lib/libcurl.so.4.8.0 /usr/lib/
+COPY --from=os-fixes /usr/lib/libbrotlicommon.so.1.2.1 /usr/lib/
+COPY --from=os-fixes /usr/lib/libbrotlidec.so.1.2.1 /usr/lib/
+COPY --from=os-fixes /usr/lib/libbrotlienc.so.1.2.1 /usr/lib/
 RUN set -e; \
+    tar -xf /tmp/os-fixes.tar -C /; \
+    rm -f /tmp/os-fixes.tar /usr/lib/libexpat.so.1.13.0; \
     ln -sf libcurl.so.4.8.0 /usr/lib/libcurl.so.4; \
     ln -sf libbrotlicommon.so.1.2.1 /usr/lib/libbrotlicommon.so.1; \
     ln -sf libbrotlidec.so.1.2.1 /usr/lib/libbrotlidec.so.1; \
     ln -sf libbrotlienc.so.1.2.1 /usr/lib/libbrotlienc.so.1; \
     rm -f /usr/lib/libbrotlicommon.so.1.2.0 /usr/lib/libbrotlidec.so.1.2.0 /usr/lib/libbrotlienc.so.1.2.0; \
     sed -i 's/^V:8.22.0-r0$/V:8.23.0-r0/' /lib/apk/db/installed; \
-    sed -i 's/^V:1.2.0-r1$/V:1.2.1-r0/; s/libbrotlicommon\.so\.1\.2\.0/libbrotlicommon.so.1.2.1/g; s/libbrotlidec\.so\.1\.2\.0/libbrotlidec.so.1.2.1/g; s/libbrotlienc\.so\.1\.2\.0/libbrotlienc.so.1.2.1/g; s/=1\.2\.0/=1.2.1/g' /lib/apk/db/installed
+    sed -i 's/^V:1.2.0-r1$/V:1.2.1-r0/; s/libbrotlicommon\.so\.1\.2\.0/libbrotlicommon.so.1.2.1/g; s/libbrotlidec\.so\.1\.2\.0/libbrotlidec.so.1.2.1/g; s/libbrotlienc\.so\.1\.2\.0/libbrotlienc.so.1.2.1/g; s/=1\.2\.0/=1.2.1/g' /lib/apk/db/installed; \
+    sed -i '/^P:libexpat$/,/^$/ s/^V:2\.9\.0-r1$/V:2.10.0-r0/' /lib/apk/db/installed; \
+    sed -i '/^P:openssh/,/^$/ s/^V:10\.3_p1-r1$/V:10.3_p1-r2/' /lib/apk/db/installed
 
 # HARDENING: replace npm's bundled undici 6.28.1 with 6.29.1.
 RUN rm -rf /usr/lib/node_modules/npm/node_modules/undici

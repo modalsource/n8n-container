@@ -23,7 +23,7 @@ Le **22 HIGH** residue, tutte con fix disponibile:
 
 | Pacchetto | Installato | Fix | Dove si corregge |
 |---|---|---|---|
-| follow-redirects | 1.16.0 | 1.16.1 | override `pnpm-workspace.yaml` (Fase 3) |
+| follow-redirects | 1.16.0 | 1.16.2 | override `pnpm-workspace.yaml` (Fase 3) |
 | @modelcontextprotocol/sdk | 1.31.0 | 1.32.0 | catalog `pnpm-workspace.yaml` (Fase 3) |
 | @modelcontextprotocol/server | 2.0.0 | 2.3.0 | catalog `pnpm-workspace.yaml` (Fase 3) |
 | @modelcontextprotocol/node | 2.0.0 | 2.1.0 | catalog `pnpm-workspace.yaml` (Fase 3; finding DB 28/10) |
@@ -220,12 +220,17 @@ usa per i nodi preinstallati, vedi 2c). Contiene tre modifiche marcate
 - `RUNTIME_IMAGE` bumpata al digest del 23/10 (`sha256:4f98092c…`): la base
   rebuildata elimina `libde265` (misurato: 32 → 25 CVE OS). Il `BUILDER_IMAGE`
   è irrilevante per l'immagine finale (multi-stage: solo i `.node` vengono copiati).
-- `libcurl`/`brotli-libs`: la base DHI **non ha `apk`** (exit 127), quindi il
-  Dockerfile aggiunge uno stage `libcurl-fix` (`FROM alpine:3.24`) che installa
-  `libcurl>=8.23.0-r0` e `brotli-libs>=1.2.1-r0`, copia le librerie nel runtime
-  e aggiorna le entry `P:`/`V:` di `/lib/apk/db/installed` (Trivy legge quelle).
-  Chiude le 2 HIGH OS (+ ~22 LOW). Sono sostituzioni patch-level, ABI
-  compatibili; vecchi file brotli rimossi e symlink aggiornati. Verifica con
+- `libcurl`/`brotli-libs`/`openssh`/`libexpat`: la base DHI **non ha `apk`**
+  (exit 127), quindi il Dockerfile aggiunge uno stage `os-fixes`
+  (`FROM alpine:3.24`) che installa `libcurl>=8.23.0-r0`,
+  `brotli-libs>=1.2.1-r0`, `expat>=2.10.0-r0` e `openssh>=10.3_p1-r2`, copia
+  librerie/binari nel runtime e aggiorna le entry `P:`/`V:` di
+  `/lib/apk/db/installed` (Trivy legge quelle). Chiude le 2 HIGH di
+  libcurl/brotli (+ ~22 LOW), le 4 HIGH di `libexpat` e la CRITICAL
+  CVE-2026-123158 su tutti i pacchetti `openssh-*` (finding del DB 24/11 sulla
+  stessa base pinnata). Sono sostituzioni patch-level, ABI compatibili; i
+  binari openssh sono compilati contro la stessa OpenSSL 3.5.9 della base.
+  Vecchi file rimossi e symlink aggiornati. Verifica con `ssh -V`, `sshd -V`,
   `n8n --version` e lo smoke test dell'immagine. Se in futuro `n8nio/base`
   pubblica un digest con i fix, preferiscilo e rimuovi lo stage.
 - `undici` di **npm**: la base include npm 11.21.1 con `undici 6.28.1`
@@ -294,7 +299,7 @@ n8n bumpa da solo):
 | catalog | `vue-i18n` (catalog frontend) | ^11.4.4 | ^11.4.14 |
 | overrides | `multer` | ^2.3.0 | ^2.5.0 |
 | overrides | `body-parser` | 2.3.0 | 2.4.0 |
-| overrides | `follow-redirects` | 1.16.0 (pin esatto) | 1.16.1 |
+| overrides | `follow-redirects` | 1.16.0 (pin esatto) | 1.16.2 |
 | overrides | `toml` (selettore `toml@<5.0.1`) | 4.2.0 | 5.0.1 |
 | overrides | `@azure/msal-node` (aggiunto) | 5.1.5 / 5.6.0 | ^7.1.0 |
 | overrides | `'mssql@12.7.0>tedious'` | 20.0.5 | 20.3.7 |
