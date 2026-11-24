@@ -1,0 +1,6 @@
+{
+  "name": "n8n-core",
+  "version": "0.0.0-n8n-image-stub",
+  "description": "Placeholder used to avoid installing the ancient n8n-core 0.111.0 that @digital-boss/n8n-nodes-billrun-suitecrm declares but never requires",
+  "main": "index.js"
+}

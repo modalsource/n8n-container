@@ -27,6 +27,29 @@ RUN npm pack undici@6.29.1 --pack-destination /tmp \
  && mkdir -p /tmp/undici \
  && tar xzf /tmp/undici-6.29.1.tgz -C /tmp/undici --strip-components=1
 
+# Community nodes are baked into the image instead of being installed at
+# runtime by an init container. They live in /opt, not in ~/.n8n, so a
+# persistent volume mounted on /home/node/.n8n cannot shadow them. The separate
+# stage keeps npm's cache and install leftovers out of the final image.
+#
+# - --legacy-peer-deps: do not duplicate n8n-workflow. The custom nodes resolve
+#   the image's own copy through NODE_PATH (set in the runtime stage).
+# - --ignore-scripts: no postinstall code from third-party packages. These nodes
+#   are pure JS; a future node that needs a native build must drop this flag.
+# - n8n-core is stubbed via overrides: the SuiteCRM package declares the ancient
+#   0.111.0 but its dist only requires n8n-workflow. See custom-nodes/stub-n8n-core.
+# - n8n-nodes-pdfkit calls image-size as a callable CommonJS default. We ship
+#   2.0.3 (CVE-2025-71329/71330) and adapt that one require. The SuiteCRM
+#   package's manifest lists a credentials path without ".js", which makes
+#   n8n 2.x skip the whole package. patch-packages.mjs fixes both and fails the
+#   build if a pinned package changes in a way the patches no longer match.
+FROM ${BUILDER_IMAGE} AS custom-nodes
+WORKDIR /opt/n8n-custom-nodes
+COPY docker/images/n8n/custom-nodes/ ./
+RUN npm ci --omit=dev --no-audit --no-fund --ignore-scripts --legacy-peer-deps \
+ && node patch-packages.mjs \
+ && rm -rf /root/.npm
+
 # The runtime base has no compiler, so this stage supplies one.
 FROM ${BUILDER_IMAGE} AS toolchain
 RUN apk add --no-cache python3 make g++
@@ -76,6 +99,13 @@ ARG IMAGE_DESCRIPTION="Workflow Automation Tool"
 ENV NODE_ENV=production
 ENV N8N_RELEASE_TYPE=${N8N_RELEASE_TYPE}
 ENV SHELL=/bin/sh
+# Custom nodes are installed without their peer deps; n8n-workflow (and any
+# other peer) resolves from the n8n installation. n8n also adds its own module
+# paths to NODE_PATH at startup, this makes it explicit for every process.
+ENV NODE_PATH=/usr/local/lib/node_modules/n8n/node_modules
+# Separator in this n8n release is ';' (not ':'). If a deployment overrides the
+# variable to add more directories, it must include /opt/n8n-custom-nodes too.
+ENV N8N_CUSTOM_EXTENSIONS=/opt/n8n-custom-nodes
 
 WORKDIR /home/node
 
@@ -128,6 +158,10 @@ RUN set -e; \
 # HARDENING: replace npm's bundled undici 6.28.1 with 6.29.1.
 RUN rm -rf /usr/lib/node_modules/npm/node_modules/undici
 COPY --from=undici-fix /tmp/undici /usr/lib/node_modules/npm/node_modules/undici
+
+# Community nodes built in the custom-nodes stage. Read-only and outside
+# /home/node, so the data volume does not hide them.
+COPY --from=custom-nodes /opt/n8n-custom-nodes /opt/n8n-custom-nodes
 
 EXPOSE 5678/tcp
 USER node

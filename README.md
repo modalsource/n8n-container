@@ -59,6 +59,7 @@ Due fatti strutturali che spiegano tutto:
 
 ```
 docker/images/n8n/Dockerfile          # Fase 1: base bump + upgrade libcurl/brotli (marcato # HARDENING)
+docker/images/n8n/custom-nodes/       # nodi community preinstallati a build time (package.json + lockfile)
 pnpm/safe-overrides.diff              # Fase 3: 9 modifiche a pnpm-workspace.yaml (validato con git apply)
 pnpm/majors-test-first.diff           # Fase 3b: markdown-it ^14.3.3 (validato)
 security/vex.openvex.json             # triage delle CVE accettate (OpenVEX, formato upstream)
@@ -95,12 +96,88 @@ Il workflow usa `GITHUB_TOKEN` con `packages: write`; non servono altri secret.
 Per un'organizzazione, verifica che i package GHCR siano abilitati alla
 scrittura da Actions.
 
+## 2c. Nodi custom preinstallati (niente init container)
+
+I nodi community che prima venivano installati a runtime da un init container
+sono ora dentro l'immagine:
+
+```
+docker/images/n8n/custom-nodes/package.json       # dipendenze, versioni esatte
+docker/images/n8n/custom-nodes/package-lock.json  # lockfile committato
+docker/images/n8n/custom-nodes/stub-n8n-core/     # stub per il finto n8n-core
+```
+
+Contenuto attuale (stessi pacchetti del vecchio init container):
+
+| Pacchetto | Versione |
+|---|---|
+| `n8n-nodes-convert-image` | 0.0.2 |
+| `n8n-nodes-pdfkit` | 0.1.2 |
+| `@digital-boss/n8n-nodes-billrun-suitecrm` | 1.0.15 |
+
+Lo stage `custom-nodes` del Dockerfile esegue `npm ci` e il risultato viene
+copiato in `/opt/n8n-custom-nodes`; `N8N_CUSTOM_EXTENSIONS` punta lì. La
+directory è **fuori da `/home/node/.n8n`**: un volume persistente montato su
+`~/.n8n` non nasconde i nodi (era il motivo per cui l'init container scriveva
+nella stessa directory del volume).
+
+Dettagli non ovvi:
+
+- `--legacy-peer-deps` + `NODE_PATH=/usr/local/lib/node_modules/n8n/node_modules`:
+  i nodi usano l'`n8n-workflow` dell'immagine invece di installarne una copia
+  (meno ~200 MB e versione allineata a n8n). Vale per i peer dichiarati da
+  questi pacchetti: se ne aggiungi uno con un peer diverso, verifica che sia
+  nell'immagine.
+- `n8n-core` è sostituito da uno stub: `@digital-boss/...-suitecrm` lo dichiara
+  (`~0.111.0`, un n8n di due anni prima) ma il suo `dist` richiede solo
+  `n8n-workflow`. Senza stub il gate si prende 16 CRIT/HIGH risolvibili
+  (`axios`, `form-data`, `file-type`, `crypto-js`).
+- `n8n-nodes-pdfkit` chiama `image-size` come funzione CommonJS; con
+  `image-size@2.0.3` (chiude CVE-2025-71329/71330) l'export è `{ imageSize }`.
+  Inoltre il manifest del pacchetto SuiteCRM elenca il file delle credenziali
+  senza `.js`, e n8n 2.x scarta l'intero pacchetto. `patch-packages.mjs` corregge
+  entrambe le cose e fallisce la build se un pacchetto pinnato cambia in modo
+  incompatibile con le patch.
+- `--ignore-scripts`: nessun postinstall di terze parti. Se in futuro aggiungi
+  un nodo con dipendenze native, va rimosso e lo stage ha bisogno di una
+  toolchain (python3/make/g++).
+
+Aggiungere o aggiornare un nodo:
+
+```bash
+cd docker/images/n8n/custom-nodes
+npm install --save-exact --legacy-peer-deps <pkg>@<versione>
+# commit di package.json + package-lock.json, poi rebuild
+```
+
+Il rebuild rifà anche lo scan: i nodi custom sono nella scansione Trivy come il
+resto del bundle node (sull'albero `custom-nodes` attuale non risultano
+CRIT/HIGH; il gate conferma sull'immagine).
+
+Migrazione dal vecchio init container: rimuovi l'initContainer e svuota
+`~/.n8n/nodes` nel volume (se i pacchetti erano registrati come community
+packages, disinstallali dalla UI prima), altrimenti possono coesistere due
+copie. I nodi baked vengono caricati come `CUSTOM`: non compaiono in
+*Community nodes*, non si aggiornano dalla UI e si aggiornano solo con un
+rebuild dell'immagine. `N8N_COMMUNITY_PACKAGES_ENABLED` non li riguarda.
+
+Se il deployment imposta `N8N_CUSTOM_EXTENSIONS`, deve includere anche
+`/opt/n8n-custom-nodes` (in questa release di n8n il separatore è `;`).
+
+Verificato su `n8nio/n8n:2.45.4` con la directory montata: `n8n export:nodes`
+elenca `CUSTOM.imageFormatConverter`, `CUSTOM.pdfKit`, `CUSTOM.suiteCRM` e
+`CUSTOM.suitecrmTrigger`. Il caricamento dipende dal loader interno di n8n:
+a ogni major, rilancia quel comando nell'immagine come smoke test.
+
+
 ## 3. Le fasi
 
 ### Fase 1 — Runtime base image (OS 0)
 
-Copia `docker/images/n8n/Dockerfile` nel checkout al posto di quello upstream.
-Contiene tre modifiche marcate `# HARDENING`:
+Copia `docker/images/n8n/Dockerfile` nel checkout al posto di quello upstream e
+la directory `docker/images/n8n/custom-nodes` accanto ad esso (il Dockerfile la
+usa per i nodi preinstallati, vedi 2c). Contiene tre modifiche marcate
+`# HARDENING`:
 - `RUNTIME_IMAGE` bumpata al digest del 23/10 (`sha256:4f98092c…`): la base
   rebuildata elimina `libde265` (misurato: 32 → 25 CVE OS). Il `BUILDER_IMAGE`
   è irrilevante per l'immagine finale (multi-stage: solo i `.node` vengono copiati).

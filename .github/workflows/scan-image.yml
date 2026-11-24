@@ -58,6 +58,8 @@ jobs:
           git apply ../pnpm/safe-overrides.diff
           git apply ../pnpm/majors-test-first.diff
           cp ../docker/images/n8n/Dockerfile docker/images/n8n/Dockerfile
+          rm -rf docker/images/n8n/custom-nodes
+          cp -r ../docker/images/n8n/custom-nodes docker/images/n8n/custom-nodes
           git diff --stat
 
       - name: Setup Node
