@@ -176,14 +176,20 @@ worker in queue mode, CLI), senza aggiungere nulla al deployment.
   `<dir>/node_modules/<pkg>/package.json`, richiede il campo `n8n` e carica i
   file elencati in `n8n.nodes`/`n8n.credentials`. Una directory vuota o un
   manifest incompleto viene ignorata (visibile solo con log level `debug`).
-- **Aggiungere una directory** (es. nodi montati da ConfigMap/volume): va
-  elencata insieme a quella dell'immagine, altrimenti i nodi baked spariscono:
-
-  ```yaml
-  env:
-    - name: N8N_CUSTOM_EXTENSIONS
-      value: "/opt/n8n-custom-nodes;/home/node/.n8n/custom"
-  ```
+- **Un solo percorso effettivo in n8n 2.45.4.** Ogni directory viene caricata
+  con lo stesso package name `CUSTOM` e il loader registrato per ultimo
+  sostituisce i precedenti: con più percorsi sopravvive solo l'ultimo, non c'è
+  merge. Inoltre n8n aggiunge **sempre** `~/.n8n/custom` come prima voce, prima
+  delle directory della variabile. Quindi:
+  - lascia `N8N_CUSTOM_EXTENSIONS=/opt/n8n-custom-nodes` (default dell'immagine)
+    o non impostarla affatto;
+  - se devi usare una directory tua, mettila **dopo** `/opt/n8n-custom-nodes`;
+    l'ultima vince: `N8N_CUSTOM_EXTENSIONS=/opt/n8n-custom-nodes;/my/dir` carica
+    **solo** `/my/dir`, non entrambe.
+  - ⚠️ `N8N_CUSTOM_EXTENSIONS=/opt/n8n-custom-nodes;/home/node/.n8n/custom` **non
+    funziona**: `~/.n8n/custom` è già aggiunta da n8n e, essendo ultima,
+    sovrascrive il loader di `/opt` con una directory vuota → zero nodi custom,
+    senza warning nei log (verificato su 2.45.4).
 
   Lo stesso valore va impostato su **tutti** i pod che caricano nodi (main e
   worker); i task runner esterni non eseguono i nodi custom, quindi non serve.

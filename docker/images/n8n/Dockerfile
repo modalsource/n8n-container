@@ -118,8 +118,10 @@ ENV SHELL=/bin/sh
 # other peer) resolves from the n8n installation. n8n also adds its own module
 # paths to NODE_PATH at startup, this makes it explicit for every process.
 ENV NODE_PATH=/usr/local/lib/node_modules/n8n/node_modules
-# Separator in this n8n release is ';' (not ':'). If a deployment overrides the
-# variable to add more directories, it must include /opt/n8n-custom-nodes too.
+# Separator in this n8n release is ';' (not ':'). n8n registers every custom
+# directory under the same CUSTOM package name and the last loader wins (there
+# is no merge), so an override must keep /opt/n8n-custom-nodes as the only or
+# last value: "/opt/n8n-custom-nodes" is the supported setting.
 ENV N8N_CUSTOM_EXTENSIONS=/opt/n8n-custom-nodes
 
 WORKDIR /home/node
