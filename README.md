@@ -60,7 +60,7 @@ Due fatti strutturali che spiegano tutto:
 ```
 docker/images/n8n/Dockerfile          # Fase 1: base bump + upgrade libcurl/brotli (marcato # HARDENING)
 docker/images/n8n/custom-nodes/       # nodi community preinstallati a build time (package.json + lockfile)
-pnpm/safe-overrides.diff              # Fase 3: 9 modifiche a pnpm-workspace.yaml (validato con git apply)
+pnpm/safe-overrides.diff              # Fase 3: 15 modifiche a pnpm-workspace.yaml (validato con git apply)
 pnpm/majors-test-first.diff           # Fase 3b: markdown-it ^14.3.3 (validato)
 security/vex.openvex.json             # triage delle CVE accettate (OpenVEX, formato upstream)
 security/vex-statement-template.json  # template di statement da compilare
@@ -292,7 +292,7 @@ e `docker push`), oppure fai pushare bake direttamente settando
 caso lo script richiede anche `RUNNERS_IMAGE_BASE_NAME` sullo stesso registry,
 altrimenti si ferma con errore (evita push accidentale sul repo ufficiale).
 
-Le 13 modifiche del diff (i selettori non usati da upstream restano no-op quando
+Le 15 modifiche del diff (i selettori non usati da upstream restano no-op quando
 n8n bumpa da solo):
 
 | Sezione | Voce | Da | A |
@@ -306,6 +306,7 @@ n8n bumpa da solo):
 | overrides | `multer` | ^2.3.0 | ^2.5.0 |
 | overrides | `body-parser` | 2.3.0 | 2.4.0 |
 | overrides | `follow-redirects` | 1.16.0 (pin esatto) | 1.16.2 |
+| catalog + overrides | `nodemailer` | 10.0.14 (pin esatto) | 10.2.1 |
 | overrides | `toml` (selettore `toml@<5.0.1`) | 4.2.0 | 5.0.1 |
 | overrides | `@azure/msal-node` (aggiunto) | 5.1.5 / 5.6.0 | ^7.1.0 |
 | overrides | `'mssql@12.7.0>tedious'` | 20.0.5 | 20.3.7 |
@@ -335,6 +336,16 @@ realistico con output identico. Test consigliato: suite
 che contratto semver si aspetta msal-node ^5: dopo il rebuild, testare i flussi
 Azure (nodi Microsoft/Azure con credenziali configurate) prima del push. Se lo
 smoke fallisce, spostare la voce in majors/VEX.
+
+ℹ️ **Nota su `nodemailer`**: bump patch/minor dentro il major 10 (10.0.14 →
+10.2.1), ma il pin è **doppio**: catalog default (`nodemailer: 10.0.14`) e
+`overrides` (`nodemailer: 10.0.14`). Il diff alza entrambi: cambiare solo il
+catalog non basta, perché l'override continua a forzare 10.0.14 su tutto
+l'albero. È usato dal nodo *Send Email* (`packages/nodes-base`) e dalla CLI
+(`packages/cli`). L'API dentro il major 10 è stabile, ma dopo il rebuild fai uno
+smoke di invio email (e delle email di invito/reset password). 10.2.1 è il
+minimo richiesto dal gate; `latest` è 10.6.1, salibile in seguito con lo stesso
+meccanismo.
 
 `handlebars` non serve: upstream lo pinna già a 4.7.10.
 
@@ -467,6 +478,11 @@ ha fatto emergere altri quattro gruppi, tutti risolti con fix patch-level:
 `follow-redirects` CVE-2026-116689 (override 1.16.2), `openssh`
 CVE-2026-123158 CRITICAL (10.3_p1-r2) e le 4 HIGH di `libexpat` (2.10.0-r0).
 Gate con DB 24/11 sulla r4: **0 CRIT/HIGH**. Resta solo `zod`, coperto da VEX.
+Con il DB del 25/11 il gate richiede anche `nodemailer` ≥ 10.2.1 (l'immagine
+2.45.4 ne contiene 10.0.14): la voce è stata aggiunta alla Fase 3 (catalog +
+override, 10.0.14 → 10.2.1). Il finding si chiude solo dopo `pnpm install` +
+rebuild, che rigenerano lockfile e closure. La **r5** (25/11, stesso n8n 2.45.4)
+è la build che porta questo bump.
 Il full scan MED/LOW della r4 non è stato rilanciato.
 
 Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
