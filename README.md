@@ -483,6 +483,15 @@ Con il DB del 25/11 il gate richiede anche `nodemailer` ≥ 10.2.1 (l'immagine
 override, 10.0.14 → 10.2.1). Il finding si chiude solo dopo `pnpm install` +
 rebuild, che rigenerano lockfile e closure. La **r5** (25/11, stesso n8n 2.45.4)
 è la build che porta questo bump.
+
+**r5 pubblicata** (commit `377e7ef`):
+`ghcr.io/modalsource/n8n-container:2.45.4-r5` (index `sha256:69b7549f…`, amd64
+`sha256:f94e0a89…`, arm64 `sha256:dde58728…`) e
+`ghcr.io/modalsource/n8n-container-runners:2.45.4-r5` (index `sha256:f287cbc8…`).
+Gate CI con DB 25/11: **0 CRIT/HIGH**. SBOM dell'immagine pubblicata:
+`nodemailer` **10.2.1**, `n8n` 2.45.4. Anche la scansione locale dell'artefatto
+remoto (Trivy 0.76.2, DB 24/11, stessi filtri del gate) dà 0 finding
+CRIT/HIGH con fix.
 Il full scan MED/LOW della r4 non è stato rilanciato.
 
 Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
