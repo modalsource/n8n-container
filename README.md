@@ -496,6 +496,21 @@ remoto (Trivy 0.76.2, DB 24/11, stessi filtri del gate) dà 0 finding
 CRIT/HIGH con fix.
 Il full scan MED/LOW della r4 non è stato rilanciato.
 
+La **r6** (26/11, stesso n8n 2.45.4) aggiunge i nodi community
+`@devlikeapro/n8n-nodes-chatwoot` 1.0.2 e `@formbricks/n8n-nodes-formbricks`
+1.0.2. La prima run è fallita **prima del push** perché Alpine ha aggiornato
+`libexpat` a 2.11.0-r0 (`libexpat.so.1.14.0`): lo stage `os-fixes` puntava
+ancora a 1.13.1. Il commit `b6baabb` aggiorna pin, file estratto e voce
+`/lib/apk/db/installed`; la run successiva è passata.
+
+**r6 pubblicata** (commit `b6baabb`):
+`ghcr.io/modalsource/n8n-container:2.45.4-r6` (index `sha256:900a7713…`, amd64
+`sha256:a8950c02…`, arm64 `sha256:37d13262…`) e
+`ghcr.io/modalsource/n8n-container-runners:2.45.4-r6` (index `sha256:bdad04c7…`).
+Gate CI con DB 26/11: **0 CRIT/HIGH**. SBOM dell'immagine: `n8n` 2.45.4,
+`nodemailer` 10.2.1, `libexpat` 2.11.0-r0, `n8n-nodes-chatwoot` 1.0.2,
+`n8n-nodes-formbricks` 1.0.2.
+
 Wiz sulla r1 mostrava 4 HIGH: `tedious`, `samlify`, `undici` di npm e `zod`.
 La r2 ha chiuso i primi tre; la r3 chiude anche `@modelcontextprotocol/node`
 2.0.0 → 2.1.0. Resta `zod`.
