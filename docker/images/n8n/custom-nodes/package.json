@@ -3,7 +3,9 @@
   "private": true,
   "description": "Community nodes pre-installed in the hardened n8n image (replaces the runtime init container)",
   "dependencies": {
+    "@devlikeapro/n8n-nodes-chatwoot": "1.0.2",
     "@digital-boss/n8n-nodes-billrun-suitecrm": "1.0.15",
+    "@formbricks/n8n-nodes-formbricks": "1.0.2",
     "n8n-nodes-convert-image": "0.0.2",
     "n8n-nodes-pdfkit": "0.1.2"
   },

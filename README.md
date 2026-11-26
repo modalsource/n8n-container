@@ -114,6 +114,8 @@ Contenuto attuale (stessi pacchetti del vecchio init container):
 | `n8n-nodes-convert-image` | 0.0.2 |
 | `n8n-nodes-pdfkit` | 0.1.2 |
 | `@digital-boss/n8n-nodes-billrun-suitecrm` | 1.0.15 |
+| `@devlikeapro/n8n-nodes-chatwoot` | 1.0.2 |
+| `@formbricks/n8n-nodes-formbricks` | 1.0.2 |
 
 Lo stage `custom-nodes` del Dockerfile esegue `npm ci` e il risultato viene
 copiato in `/opt/n8n-custom-nodes`; `N8N_CUSTOM_EXTENSIONS` punta lì. La
