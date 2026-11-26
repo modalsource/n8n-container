@@ -18,17 +18,17 @@ ARG RUNTIME_IMAGE=n8nio/base:26.12.1@sha256:4f98092ca321cc3395c056791013c2ad0469
 # binary (apk add exits 127). Take the fixed packages from Alpine 3.24 instead.
 # Besides libcurl/brotli, the pinned base ships openssh 10.3_p1-r1
 # (CVE-2026-123158 CRITICAL, all openssh-* packages) and libexpat 2.9.0-r1
-# (4 HIGH); both have patch-level fixes upstream (10.3_p1-r2 / 2.10.0-r0).
+# (4 HIGH); both have patch-level fixes upstream (10.3_p1-r2 / 2.11.0-r0).
 # The openssh binaries are built against the same OpenSSL 3.5.9 as the base,
 # so the tar is extracted over the runtime root.
 FROM alpine:3.24 AS os-fixes
 RUN apk add --no-cache \
       'libcurl>=8.23.0-r0' \
       'brotli-libs>=1.2.1-r0' \
-      'expat>=2.10.0-r0' \
+      'expat>=2.11.0-r0' \
       'openssh>=10.3_p1-r2' \
  && tar -cf /os-fixes.tar -C / \
-      usr/lib/libexpat.so.1.13.1 usr/lib/libexpat.so.1 \
+      usr/lib/libexpat.so.1.14.0 usr/lib/libexpat.so.1 \
       usr/bin/ssh usr/bin/scp usr/bin/sftp usr/bin/ssh-add usr/bin/ssh-agent \
       usr/bin/ssh-copy-id usr/bin/ssh-keyscan usr/bin/ssh-keygen \
       usr/bin/ssh-pkcs11-helper usr/bin/findssl.sh \
@@ -174,7 +174,7 @@ RUN set -e; \
     rm -f /usr/lib/libbrotlicommon.so.1.2.0 /usr/lib/libbrotlidec.so.1.2.0 /usr/lib/libbrotlienc.so.1.2.0; \
     sed -i 's/^V:8.22.0-r0$/V:8.23.0-r0/' /lib/apk/db/installed; \
     sed -i 's/^V:1.2.0-r1$/V:1.2.1-r0/; s/libbrotlicommon\.so\.1\.2\.0/libbrotlicommon.so.1.2.1/g; s/libbrotlidec\.so\.1\.2\.0/libbrotlidec.so.1.2.1/g; s/libbrotlienc\.so\.1\.2\.0/libbrotlienc.so.1.2.1/g; s/=1\.2\.0/=1.2.1/g' /lib/apk/db/installed; \
-    sed -i '/^P:libexpat$/,/^$/ s/^V:2\.9\.0-r1$/V:2.10.0-r0/' /lib/apk/db/installed; \
+    sed -i '/^P:libexpat$/,/^$/ s/^V:2\.9\.0-r1$/V:2.11.0-r0/' /lib/apk/db/installed; \
     sed -i '/^P:openssh/,/^$/ s/^V:10\.3_p1-r1$/V:10.3_p1-r2/' /lib/apk/db/installed
 
 # HARDENING: replace npm's bundled undici 6.28.1 with 6.29.1.
